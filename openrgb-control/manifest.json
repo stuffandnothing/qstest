@@ -3,9 +3,9 @@
   "name": "OpenRGB Control",
   "version": "1.0.0",
   "minNoctaliaVersion": "3.6.0",
-  "author": "you",
+  "author": "ridge",
   "license": "MIT",
-  "description": "Control OpenRGB profiles and brightness from the bar",
+  "description": "Control OpenRGB profiles from the bar",
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },

@@ -26,8 +26,10 @@ Rectangle {
     property bool expanded: false
     property bool busy: false
 
-    // --- Layout ---
-    implicitWidth: expanded ? mainRow.implicitWidth + Style.marginM * 2 : collapsedRow.implicitWidth + Style.marginM * 2
+    // --- Sizing ---
+    implicitWidth: expanded
+        ? mainRow.implicitWidth + Style.marginM * 2
+        : collapsedRow.implicitWidth + Style.marginM * 2
     implicitHeight: Style.barHeight
     color: Style.capsuleColor
     radius: Style.radiusM
@@ -36,7 +38,7 @@ Rectangle {
         NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
     }
 
-    // --- Collapsed view: just the icon + active profile name ---
+    // --- Collapsed view ---
     RowLayout {
         id: collapsedRow
         anchors.centerIn: parent
@@ -52,18 +54,29 @@ Rectangle {
             color: Color.mOnSurface
             pointSize: Style.fontSizeS
         }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.expanded = true
+        }
     }
 
-    // --- Expanded view: profile buttons ---
+    // --- Expanded view ---
     RowLayout {
         id: mainRow
         anchors.centerIn: parent
         visible: expanded
         spacing: Style.marginXS
 
+        // Clicking the icon collapses
         NIcon {
             icon: "lightbulb"
             color: Color.mPrimary
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.expanded = false
+            }
         }
 
         Repeater {
@@ -78,6 +91,10 @@ Rectangle {
                 radius: Style.radiusS
                 color: isActive ? Color.mPrimary : "transparent"
                 opacity: root.busy ? 0.5 : 1.0
+
+                Behavior on color {
+                    ColorAnimation { duration: 120 }
+                }
 
                 NText {
                     id: profileLabel
@@ -97,68 +114,73 @@ Rectangle {
         }
     }
 
-    // --- Toggle expand on click (collapsed area) ---
-    MouseArea {
-        anchors.fill: parent
-        visible: !expanded
-        onClicked: root.expanded = true
-    }
+    // --- Process ---
+    Process {
+        id: openrgbProc
+        property string pendingProfile: ""
 
-    // Clicking outside collapses
-    MouseArea {
-        id: collapseArea
-        anchors.fill: parent
-        visible: expanded
-        propagateComposedEvents: true
-        // clicks on child MouseAreas still propagate; this just catches misses
-        onClicked: (mouse) => {
-            mouse.accepted = false
-        }
-    }
+        stderr: StdioCollector {}
 
-    // --- Process to run openrgb CLI ---
-Process {
-    id: openrgbProc
-    property string pendingProfile: ""
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var out = this.text
+                Logger.i("OpenRGB", "stdout:", out)
 
-    stderr: StdioCollector {}
-    stdout: StdioCollector {
-        onStreamFinished: {
-            Logger.i("OpenRGB", "stdout:", this.text)
-        }
-    }
+                var success = out.indexOf("Profile loaded successfully") !== -1
+                             || out.indexOf("Color set") !== -1
+                             || out.indexOf("color set") !== -1
 
-    onExited: (exitCode, exitStatus) => {
-        Logger.i("OpenRGB", "Exited with code:", exitCode, "status:", exitStatus)
-        Logger.i("OpenRGB", "stderr:", openrgbProc.stderrCollector)
-        root.busy = false
-        if (exitCode === 0) {
-            root.activeProfile = openrgbProc.pendingProfile
-            if (pluginApi) {
-                pluginApi.pluginSettings.activeProfile = root.activeProfile
-                pluginApi.saveSettings()
+                root.busy = false
+
+                if (success) {
+                    root.activeProfile = openrgbProc.pendingProfile
+                    if (root.pluginApi) {
+                        root.pluginApi.pluginSettings.activeProfile = root.activeProfile
+                        root.pluginApi.saveSettings()
+                    }
+                    root.expanded = false
+                    ToastService.showNotice("RGB → " + root.activeProfile)
+                    Logger.i("OpenRGB", "Profile applied:", root.activeProfile)
+                } else {
+                    ToastService.showError("OpenRGB: profile failed")
+                    Logger.e("OpenRGB", "Unexpected output:", out)
+                }
             }
-            root.expanded = false
-            ToastService.showNotice("RGB → " + root.activeProfile)
-        } else {
-            ToastService.showError("OpenRGB failed (exit " + exitCode + ")")
-            Logger.e("OpenRGB", "Failed, command was:", openrgbProc.command)
+        }
+
+        onExited: (exitCode, exitStatus) => {
+            Logger.i("OpenRGB", "Process exited:", exitCode)
+            // busy is cleared in onStreamFinished; failsafe in case stdout never fires
+            root.busy = false
         }
     }
-}
-function applyProfile(profileName) {
-    if (busy) return
-    busy = true
-    openrgbProc.pendingProfile = profileName
 
-    if (profileName === "Off") {
-        openrgbProc.command = ["/usr/bin/openrgb", "--client", root.host + ":" + root.port, "--color", "000000"]
-    } else {
-        openrgbProc.command = ["/usr/bin/openrgb", "--client", root.host + ":" + root.port, "-p", profileName]
+    // --- Functions ---
+    function applyProfile(profileName) {
+        if (root.busy) return
+        root.busy = true
+        openrgbProc.pendingProfile = profileName
+
+        if (profileName === "Off") {
+            openrgbProc.command = [
+                "/usr/bin/openrgb",
+                "--client", root.host + ":" + root.port,
+                "--color", "000000"
+            ]
+        } else {
+            openrgbProc.command = [
+                "/usr/bin/openrgb",
+                "--client", root.host + ":" + root.port,
+                "-p", profileName
+            ]
+        }
+
+        Logger.i("OpenRGB", "Running:", openrgbProc.command)
+        openrgbProc.running = false
+        openrgbProc.running = true
     }
 
-    Logger.i("OpenRGB", "Running command:", openrgbProc.command)
-    openrgbProc.running = false
-    openrgbProc.running = true
-}
+    Component.onCompleted: {
+        Logger.i("OpenRGB", "Widget loaded, active profile:", root.activeProfile)
+    }
 }
