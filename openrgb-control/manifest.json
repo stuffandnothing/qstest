@@ -1,0 +1,23 @@
+{
+  "id": "openrgb-control",
+  "name": "OpenRGB Control",
+  "version": "1.0.0",
+  "minNoctaliaVersion": "3.6.0",
+  "author": "you",
+  "license": "MIT",
+  "description": "Control OpenRGB profiles and brightness from the bar",
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "dependencies": {
+    "plugins": []
+  },
+  "metadata": {
+    "defaultSettings": {
+      "profiles": ["Default", "Gaming", "Off"],
+      "activeProfile": "Default",
+      "serverHost": "127.0.0.1",
+      "serverPort": 6742
+    }
+  }
+}
