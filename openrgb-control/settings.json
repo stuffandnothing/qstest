@@ -1,0 +1,12 @@
+{
+  "profiles": [
+    "Default",
+    "Off"
+  ],
+  "activeProfile": "Default",
+  "serverHost": "127.0.0.1",
+  "serverPort": 6742,
+  "offColor": "#000000",
+  "brightness": 95,
+  "notifications": false
+}
